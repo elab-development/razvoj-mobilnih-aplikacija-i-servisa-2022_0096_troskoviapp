@@ -15,7 +15,7 @@ export default function OnboardingScreen() {
       <View style={styles.buttonContainer}>
         <TouchableOpacity
           style={[styles.button, styles.loginButton]}
-          onPress={() => console.log("Login pritisnut")}
+          onPress={() => router.push("/login" as const as any)}
         >
           <Text style={styles.loginButtonText}>Prijavi se</Text>
         </TouchableOpacity>

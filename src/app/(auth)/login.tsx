@@ -20,17 +20,23 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setErrorMessage(null);
+
+    // Validacija
     if (!email || !password) {
       setErrorMessage("Molimo vas da unesete e-mail i lozinku.");
       return;
     }
+
     setLoading(true);
+
     try {
-      console.log("Prijava:", { email, password });
+      console.log("Pokušaj prijave sa:", { email, password });
+
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      // router.replace("/dashboard" as Href);
+
+      router.replace("/dashboard" as Href);
     } catch (error: any) {
-      setErrorMessage(error.message || "Greška pri prijavi.");
+      setErrorMessage(error.message || "Neispravni podaci za prijavu.");
     } finally {
       setLoading(false);
     }
@@ -45,7 +51,7 @@ export default function LoginScreen() {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Dobrodošli nazad</Text>
+        <Text style={styles.title}>Login</Text>
 
         {errorMessage && (
           <View style={styles.errorBox}>
