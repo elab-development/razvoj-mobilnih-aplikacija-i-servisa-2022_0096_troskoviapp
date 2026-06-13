@@ -1,5 +1,5 @@
+import { router } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
 export default function OnboardingScreen() {
   return (
     <View style={styles.container}>
@@ -22,7 +22,7 @@ export default function OnboardingScreen() {
 
         <TouchableOpacity
           style={[styles.button, styles.registerButton]}
-          onPress={() => console.log("Register pritisnut")}
+          onPress={() => router.push("/register" as const as any)}
         >
           <Text style={styles.registerButtonText}>Registruj se</Text>
         </TouchableOpacity>
