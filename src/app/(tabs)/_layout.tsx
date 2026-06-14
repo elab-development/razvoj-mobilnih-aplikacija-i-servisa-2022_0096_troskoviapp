@@ -1,83 +1,85 @@
 import { Feather } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useTheme } from "../../ThemeContext";
 
 export default function TabsLayout() {
+  const { theme, isDarkMode } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#3b82f6", // Aktivna plava
-        tabBarInactiveTintColor: "#94a3b8", // Svetlo siva koja se odlično vidi
-        tabBarStyle: {
-          backgroundColor: "#111c24", // Tamna pozadina menija
-          borderTopWidth: 0,
-          height: 72, // Povećavamo visinu sa 68 na 72 da rešimo sečenje
-          paddingBottom: 12, // Dajemo jasan prostor tekstu na dnu
-          paddingTop: 8, // Prostor za ikonice na vrhu
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "500",
-          margin: 0, // Resetujemo sve spoljne margine
-          padding: 0, // Resetujemo unutrašnji prostor
-          minHeight: 14, // Garantujemo minimalnu visinu za ispis celih slova
-        },
-        tabBarIconStyle: {
-          marginBottom: 2, // Lagano odvajamo ikonicu od teksta ispod nje
-        },
         headerShown: false,
+        // Konfiguracija celog donjeg menija
+        tabBarStyle: {
+          backgroundColor: theme.tabBar,
+          borderTopColor: theme.border,
+          height: 75, // Dovoljno visoko da sve stane bez odsecanja
+          paddingTop: 8, // Prostor iznad ikonica
+          paddingBottom: 12, // Siguran prostor ispod teksta da ne pobegne sa ekrana
+        },
+        tabBarActiveTintColor: theme.accent, // Boja kada je tab selektovan
+        tabBarInactiveTintColor: isDarkMode ? "#64748b" : "#94a3b8", // Boja kada tab nije selektovan
+
+        // KLJUČNO PODEŠAVANJE ZA SLOVA DA SE VIDE LEPO I CELA:
+        tabBarLabelStyle: {
+          fontSize: 10, // Optimalna veličina slova za 5 tabova
+          fontWeight: "600", // Malo deblja slova radi bolje čitljivosti
+          marginTop: 4, // Razmak između ikonice i teksta
+          width: "100%", // Tera tekst da koristi punu širinu taba
+        },
       }}
     >
-      {/* 1. Dashboard (Tanka i moderna ikona monitora) */}
+      {/* 1. DASHBOARD */}
       <Tabs.Screen
         name="dashboard"
         options={{
           title: "Dashboard",
-          tabBarIcon: ({ color, focused }) => (
-            <Feather name="monitor" size={22} color={color} />
+          tabBarIcon: ({ color }) => (
+            <Feather name="monitor" size={20} color={color} />
           ),
         }}
       />
 
-      {/* 2. Troškovi (Prefinjeni znak dolara) */}
+      {/* 2. TROŠKOVI */}
       <Tabs.Screen
         name="expenses"
         options={{
           title: "Troškovi",
           tabBarIcon: ({ color }) => (
-            <Feather name="dollar-sign" size={22} color={color} />
+            <Feather name="dollar-sign" size={20} color={color} />
           ),
         }}
       />
 
-      {/* 3. Statistika (Elegantan grafik sa krivom linijom) */}
+      {/* 3. STATISTIKA */}
       <Tabs.Screen
         name="analytics"
         options={{
           title: "Statistika",
           tabBarIcon: ({ color }) => (
-            <Feather name="trending-up" size={22} color={color} />
+            <Feather name="trending-up" size={20} color={color} />
           ),
         }}
       />
 
-      {/* 4. Profil (Okrugla moderna ikonica korisnika) */}
+      {/* 4. PROFIL */}
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profil",
           tabBarIcon: ({ color }) => (
-            <Feather name="user" size={22} color={color} />
+            <Feather name="user" size={20} color={color} />
           ),
         }}
       />
 
-      {/* 5. Favoriti (Tanka, elegantna zvezdica) */}
+      {/* 5. FAVORITI */}
       <Tabs.Screen
         name="favorites"
         options={{
           title: "Favoriti",
           tabBarIcon: ({ color }) => (
-            <Feather name="star" size={22} color={color} />
+            <Feather name="star" size={20} color={color} />
           ),
         }}
       />
