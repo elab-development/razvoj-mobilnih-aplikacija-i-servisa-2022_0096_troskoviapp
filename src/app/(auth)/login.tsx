@@ -1,5 +1,6 @@
 import { Href, router } from "expo-router";
 import { useState } from "react";
+import { supabase } from "../supabaseClient";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -19,28 +20,36 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    setErrorMessage(null);
+  setErrorMessage(null);
 
-    // Validacija
-    if (!email || !password) {
-      setErrorMessage("Molimo vas da unesete e-mail i lozinku.");
-      return;
-    }
+  // Validacija
+  if (!email || !password) {
+    setErrorMessage("Molimo vas da unesete e-mail i lozinku.");
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      console.log("Pokušaj prijave sa:", { email, password });
+  try {
+    // Prijava na Supabase Auth sistem
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (error) throw error;
 
-      router.replace("/dashboard" as Href);
-    } catch (error: any) {
-      setErrorMessage(error.message || "Neispravni podaci za prijavu.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    console.log("Korisnik uspešno ulogovan:", data.user.email);
+
+    // Preusmeravanje na glavnu stranicu (Dashboard)
+    router.replace("/dashboard" as Href);
+
+  } catch (error: any) {
+    setErrorMessage(error.message || "Neispravni podaci za prijavu.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView

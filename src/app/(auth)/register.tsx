@@ -1,15 +1,16 @@
 import { Href, router } from "expo-router";
 import { useState } from "react";
+import { supabase } from "../supabaseClient";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function RegisterScreen() {
@@ -26,10 +27,9 @@ export default function RegisterScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleRegister = async () => {
-    // Resetuj greške pre početka akcije
     setErrorMessage(null);
 
-    // Bazična validacija polja
+    // Validacija polja
     if (
       !email ||
       !password ||
@@ -45,20 +45,37 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      // Ovde će u narednim koracima doći direktno povezivanje sa Supabase platformom
-      console.log("Slanje podataka na backend:", {
-        email,
-        password,
-        firstName,
-        lastName,
-        phone,
-        currentBalance: parseFloat(currentBalance),
+      // 1. Registracija u Supabase Auth (Kreira korisnika sa email-om i lozinkom)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email,
+        password: password,
       });
 
-      // Simulacija mrežnog zahteva (traje 2 sekunde)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (authError) throw authError;
+
+      const user = authData.user;
+
+      // 2. Ako je uspešno kreiran, upisujemo dodatne podatke u tvoju tabelu 'Korisnici'
+      if (user) {
+        const { error: dbError } = await supabase
+          .from("Korisnici") // Pazi da se tabela u Supabase zove tačno ovako (veliko K)
+          .insert([
+            {
+              id: user.id, // ID koji je Auth sistem dodelio korisniku
+              first_name: firstName,
+              last_name: lastName,
+              phone: phone,
+              current_balance: parseFloat(currentBalance), // Pretvaramo tekst u broj
+            },
+          ]);
+
+        if (dbError) throw dbError;
+      }
 
       // Uspešno izvršeno -> Preusmeravanje korisnika na login stranicu
+      alert(
+        "Uspešna registracija! Proverite e-mail za potvrdu (ako je uključena).",
+      );
       router.replace("/login" as Href);
     } catch (error: any) {
       setErrorMessage(
