@@ -55,19 +55,44 @@ export default function ExpensesScreen() {
         return;
       }
 
-      const { error } = await supabase.from("troskovi").insert([
+      const trosakIznos = parseFloat(iznos);
+
+      // 1. KORAK: Povuci trenutno stanje budžeta iz tabele Korisnici
+      const { data: profil, error: profilError } = await supabase
+        .from("Korisnici")
+        .select("current_balance")
+        .eq("id", user.id)
+        .single();
+
+      if (profilError) throw profilError;
+
+      const trenutniBudzet = profil?.current_balance
+        ? parseFloat(profil.current_balance)
+        : 0;
+      const noviBudzet = trenutniBudzet - trosakIznos;
+
+      // 2. KORAK: Unesi novi trošak u tabelu "troskovi"
+      const { error: trosakError } = await supabase.from("troskovi").insert([
         {
           user_id: user.id,
           naslov: naslov.trim(),
-          iznos: parseFloat(iznos),
+          iznos: trosakIznos,
           kategorija: odabranaKategorija,
           beljeska: beljeska.trim() || null,
         },
       ]);
 
-      if (error) throw error;
+      if (trosakError) throw trosakError;
 
-      Alert.alert("Uspeh", "Trošak je uspešno zabeležen!");
+      // 3. KORAK: Ažuriraj stanje u tabeli "Korisnici" sa novim smanjenim budžetom
+      const { error: updateError } = await supabase
+        .from("Korisnici")
+        .update({ current_balance: noviBudzet })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      Alert.alert("Uspeh", "Trošak je uspešno zabeležen i budžet je ažuriran!");
       handleDiscard();
     } catch (error: any) {
       Alert.alert("Greška", "Čuvanje nije uspelo: " + error.message);
@@ -75,7 +100,6 @@ export default function ExpensesScreen() {
       setLoading(false);
     }
   };
-
   const handleDiscard = () => {
     setIznos("");
     setNaslov("");

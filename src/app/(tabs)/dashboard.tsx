@@ -1,9 +1,11 @@
+import { Feather } from "@expo/vector-icons";
 import { Href, router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,9 +24,9 @@ const KATEGORIJE_MAPA: { [key: string]: { label: string; znak: string } } = {
   Other: { label: "Ostalo", znak: "💼" },
 };
 
-// 2. Interfejs prilagođen tvojoj stvarnoj strukturi tabele "troskovi"
+// 2. Interfejs prilagođen stvarnoj strukturi tabele "troskovi" (id je UUID - string)
 interface Trosak {
-  id: number;
+  id: string;
   user_id: string;
   naslov: string;
   iznos: number;
@@ -38,7 +40,7 @@ export default function DashboardScreen() {
 
   const [troskovi, setTroskovi] = useState<Trosak[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Povuci podatke prilikom učitavanja ekrana
   useEffect(() => {
@@ -56,11 +58,12 @@ export default function DashboardScreen() {
       if (userError) throw userError;
 
       if (!user) {
-        Alert.alert("Greška", "Korisnik nije ulogovan.");
+        if (Platform.OS === "web") alert("Korisnik nije ulogovan.");
+        else Alert.alert("Greška", "Korisnik nije ulogovan.");
         return;
       }
 
-      // Gađamo tvoju pravu tabelu "troskovi" i sortiramo po vremenu kreiranja
+      // Gađamo tabelu "troskovi" i sortiramo po vremenu kreiranja
       const { data, error } = await supabase
         .from("troskovi")
         .select("*")
@@ -72,10 +75,14 @@ export default function DashboardScreen() {
       setTroskovi(data || []);
     } catch (error: any) {
       console.error("Greška pri povlačenju:", error);
-      Alert.alert(
-        "Greška",
-        "Nije uspelo osvežavanje troškova: " + error.message,
-      );
+      if (Platform.OS === "web") {
+        alert("Nije uspelo osvežavanje troškova: " + error.message);
+      } else {
+        Alert.alert(
+          "Greška",
+          "Nije uspelo osvežavanje troškova: " + error.message,
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -87,24 +94,85 @@ export default function DashboardScreen() {
       if (error) throw error;
       router.replace("/(auth)/login" as Href);
     } catch (error: any) {
-      Alert.alert("Greška", "Nije uspela odjava: " + error.message);
+      if (Platform.OS === "web") alert("Nije uspela odjava: " + error.message);
+      else Alert.alert("Greška", "Nije uspela odjava: " + error.message);
     }
   };
 
-  const toggleExpand = (id: number) => {
+  const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
+  };
+
+  // Funkcija za brisanje troška prilagođena i za Web i za Mobile platforme
+  const handleDeleteExpense = (
+    id: string,
+    iznosTroska: number,
+    userId: string,
+  ) => {
+    console.log("Dugme kliknuto za ID:", id);
+
+    const izvrsiBrisanje = async () => {
+      try {
+        setLoading(true);
+
+        // Brisanje reda iz tabele troskovi
+        const { error } = await supabase.from("troskovi").delete().eq("id", id);
+
+        if (error) throw error;
+
+        // Odmah izbacujemo obrisani trošak iz stanja bez novog fetch-ovanja
+        setTroskovi((prev) => prev.filter((t) => t.id !== id));
+
+        if (Platform.OS === "web") {
+          alert("Trošak je uspešno obrisan.");
+        } else {
+          setTimeout(() => {
+            Alert.alert("Uspeh", "Trošak je uspešno obrisan.");
+          }, 100);
+        }
+      } catch (error: any) {
+        if (Platform.OS === "web") {
+          alert("Brisanje nije uspelo: " + error.message);
+        } else {
+          setTimeout(() => {
+            Alert.alert("Greška", "Brisanje nije uspelo: " + error.message);
+          }, 100);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Ako smo na vebu, koristi standardni window.confirm jer Alert.alert tu ne radi
+    if (Platform.OS === "web") {
+      const potvrda = window.confirm(
+        "Da li ste sigurni da želite da obrišete ovaj trošak?",
+      );
+      if (potvrda) {
+        izvrsiBrisanje();
+      }
+    } else {
+      // Ako smo na iOS/Android uređaju, podigni sistemski Alert dijalog
+      Alert.alert(
+        "Potvrda brisanja",
+        "Da li ste sigurni da želite da obrišete ovaj trošak?",
+        [
+          { text: "Otkaži", style: "cancel" },
+          { text: "Obriši", style: "destructive", onPress: izvrsiBrisanje },
+        ],
+        { cancelable: true },
+      );
+    }
   };
 
   const renderItem = ({ item }: { item: Trosak }) => {
     const isExpanded = expandedId === item.id;
 
-    // Izvlačimo lepu labelu i emodži na osnovu ključa kategorije (npr. "Food" -> "Hrana")
     const katInfo = KATEGORIJE_MAPA[item.kategorija] || {
       label: item.kategorija,
       znak: "💰",
     };
 
-    // Formatiranje datuma kreiranja
     const pročišćenDatum = item.created_at
       ? new Date(item.created_at).toLocaleDateString("sr-RS")
       : "Nema datuma";
@@ -131,7 +199,6 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <View style={styles.headerRight}>
-            {/* Promenjeno u € u skladu sa tvojim unosom */}
             <Text style={styles.itemAmount}>-{item.iznos.toFixed(2)} €</Text>
             <Text style={[styles.arrow, { color: theme.subText }]}>
               {isExpanded ? "▲" : "▼"}
@@ -173,6 +240,22 @@ export default function DashboardScreen() {
                 </Text>
               </View>
             ) : null}
+
+            {/* DUGME ZA BRISANJE TROŠKA */}
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() =>
+                handleDeleteExpense(item.id, item.iznos, item.user_id)
+              }
+            >
+              <Feather
+                name="trash-2"
+                size={16}
+                color="#ef4444"
+                style={styles.deleteIcon}
+              />
+              <Text style={styles.deleteButtonText}>Obriši trošak</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -216,7 +299,7 @@ export default function DashboardScreen() {
         ) : (
           <FlatList
             data={troskovi}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id}
             renderItem={renderItem}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
@@ -367,5 +450,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  deleteIcon: {
+    marginRight: 6,
+  },
+  deleteButtonText: {
+    color: "#ef4444",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
