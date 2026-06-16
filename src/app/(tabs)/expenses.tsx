@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import * as Notifications from "expo-notifications";
 import { useState } from "react";
 import {
@@ -54,43 +55,49 @@ export default function ExpensesScreen() {
 
       const trosakIznos = parseFloat(iznos);
 
-      // 1. Povuci balans iz tabele "Korisnici"
-      const { data: profil } = await supabase
+      // 1. Povuci balans
+      const { data: profil, error: profilError } = await supabase
         .from("Korisnici")
         .select("current_balance")
         .eq("id", user.id)
         .single();
+      if (profilError) throw profilError;
 
-      // 2. Povuci limit za ODABRANU KATEGORIJU
+      // 2. Povuci limit (osiguraj da je limit_iznos broj)
       const { data: limitData } = await supabase
         .from("budzeti")
         .select("limit_iznos")
         .eq("user_id", user.id)
-        .eq("kategorija", odabranaKategorija) // Proveravamo limit za tu konkretnu kategoriju
+        .eq("kategorija", odabranaKategorija)
         .maybeSingle();
 
-      const noviBudzet = (profil?.current_balance || 0) - trosakIznos;
+      const trenutniBudzet = parseFloat(profil?.current_balance || 0);
+      const noviBudzet = trenutniBudzet - trosakIznos;
+      const limitIznos = limitData ? parseFloat(limitData.limit_iznos) : null;
 
-      // 3. INSERT troška u "troskovi"
+      // 3. INSERT troška
       const { error: trosakError } = await supabase.from("troskovi").insert([
         {
           user_id: user.id,
           naslov: naslov.trim(),
           iznos: trosakIznos,
           kategorija: odabranaKategorija,
-          datum: new Date(),
+          datum: new Date().toISOString(), // Standardizovan format datuma
           beljeska: beljeska.trim() || null,
         },
       ]);
       if (trosakError) throw trosakError;
 
       // 4. UPDATE "Korisnici"
-      await supabase
+      const { error: updateError } = await supabase
         .from("Korisnici")
         .update({ current_balance: noviBudzet })
         .eq("id", user.id);
+      if (updateError) throw updateError;
 
-      // 5. NOTIFIKACIJE
+      // 5. USPEH - Haptika i Notifikacije
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: "Trošak dodat! ✅",
@@ -99,12 +106,12 @@ export default function ExpensesScreen() {
         trigger: null,
       });
 
-      // Provera limita za kategoriju
-      if (limitData && noviBudzet < limitData.limit_iznos) {
+      // Provera limita
+      if (limitIznos !== null && noviBudzet < limitIznos) {
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "Upozorenje! ⚠️",
-            body: `Prešli ste limit za ${odabranaKategorija}! Trenutno stanje: ${noviBudzet.toFixed(2)} EUR.`,
+            body: `Prešli ste limit za ${odabranaKategorija}! Stanje: ${noviBudzet.toFixed(2)} EUR.`,
           },
           trigger: null,
         });
@@ -113,6 +120,7 @@ export default function ExpensesScreen() {
       Alert.alert("Uspeh", "Trošak je uspešno sačuvan!");
       handleDiscard();
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); // Vibracija za grešku
       Alert.alert("Greška", error.message);
     } finally {
       setLoading(false);
