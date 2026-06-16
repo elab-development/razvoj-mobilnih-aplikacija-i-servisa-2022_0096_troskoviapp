@@ -13,16 +13,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: theme.tabBar,
           borderTopColor: theme.border,
-          height: 75, // Dovoljno visoko da sve stane bez odsecanja
+          height: 80, // Blago povećano da 6 tabova stane bez gužvanja
           paddingTop: 8, // Prostor iznad ikonica
-          paddingBottom: 12, // Siguran prostor ispod teksta da ne pobegne sa ekrana
+          paddingBottom: 14, // Siguran prostor ispod teksta
         },
         tabBarActiveTintColor: theme.accent, // Boja kada je tab selektovan
         tabBarInactiveTintColor: isDarkMode ? "#64748b" : "#94a3b8", // Boja kada tab nije selektovan
 
         // KLJUČNO PODEŠAVANJE ZA SLOVA DA SE VIDE LEPO I CELA:
         tabBarLabelStyle: {
-          fontSize: 10, // Optimalna veličina slova za 5 tabova
+          fontSize: 9.5, // Blago smanjeno jer sada imamo 6 tabova u nizu
           fontWeight: "600", // Malo deblja slova radi bolje čitljivosti
           marginTop: 4, // Razmak između ikonice i teksta
           width: "100%", // Tera tekst da koristi punu širinu taba
@@ -62,24 +62,35 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 4. PROFIL */}
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profil",
-          tabBarIcon: ({ color }) => (
-            <Feather name="user" size={20} color={color} />
-          ),
-        }}
-      />
-
-      {/* 5. BUDŽETI */}
+      {/* 4. BUDŽETI */}
       <Tabs.Screen
         name="BudgetsScreen"
         options={{
           title: "Budžeti",
           tabBarIcon: ({ color }) => (
             <Feather name="pie-chart" size={20} color={color} />
+          ),
+        }}
+      />
+
+      {/* 5. NAGRADE (ACHIEVEMENTS) */}
+      <Tabs.Screen
+        name="achievements"
+        options={{
+          title: "Nagrade",
+          tabBarIcon: ({ color }) => (
+            <Feather name="award" size={20} color={color} /> // Svečana ikonica pehara/nagrade
+          ),
+        }}
+      />
+
+      {/* 6. PROFIL */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profil",
+          tabBarIcon: ({ color }) => (
+            <Feather name="user" size={20} color={color} />
           ),
         }}
       />
