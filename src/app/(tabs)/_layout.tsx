@@ -73,13 +73,13 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* 5. FAVORITI */}
+      {/* 5. BUDŽETI */}
       <Tabs.Screen
-        name="favorites"
+        name="BudgetsScreen"
         options={{
-          title: "Favoriti",
+          title: "Budžeti",
           tabBarIcon: ({ color }) => (
-            <Feather name="star" size={20} color={color} />
+            <Feather name="pie-chart" size={20} color={color} />
           ),
         }}
       />
