@@ -306,7 +306,7 @@ export default function ProfileScreen() {
             />
           ) : (
             <Text style={[styles.rowValue, { color: theme.text }]}>
-              {currentBalance} RSD
+              {currentBalance} EUR
             </Text>
           )}
         </View>

@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -49,53 +50,70 @@ export default function ExpensesScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
-      if (!user) {
-        Alert.alert("Greška", "Korisnik nije ulogovan.");
-        return;
-      }
+      if (!user) throw new Error("Korisnik nije ulogovan.");
 
       const trosakIznos = parseFloat(iznos);
 
-      // 1. KORAK: Povuci trenutno stanje budžeta iz tabele Korisnici
-      const { data: profil, error: profilError } = await supabase
+      // 1. Povuci balans iz tabele "Korisnici"
+      const { data: profil } = await supabase
         .from("Korisnici")
         .select("current_balance")
         .eq("id", user.id)
         .single();
 
-      if (profilError) throw profilError;
+      // 2. Povuci limit za ODABRANU KATEGORIJU
+      const { data: limitData } = await supabase
+        .from("budzeti")
+        .select("limit_iznos")
+        .eq("user_id", user.id)
+        .eq("kategorija", odabranaKategorija) // Proveravamo limit za tu konkretnu kategoriju
+        .maybeSingle();
 
-      const trenutniBudzet = profil?.current_balance
-        ? parseFloat(profil.current_balance)
-        : 0;
-      const noviBudzet = trenutniBudzet - trosakIznos;
+      const noviBudzet = (profil?.current_balance || 0) - trosakIznos;
 
-      // 2. KORAK: Unesi novi trošak u tabelu "troskovi"
+      // 3. INSERT troška u "troskovi"
       const { error: trosakError } = await supabase.from("troskovi").insert([
         {
           user_id: user.id,
           naslov: naslov.trim(),
           iznos: trosakIznos,
           kategorija: odabranaKategorija,
+          datum: new Date(),
           beljeska: beljeska.trim() || null,
         },
       ]);
-
       if (trosakError) throw trosakError;
 
-      // 3. KORAK: Ažuriraj stanje u tabeli "Korisnici" sa novim smanjenim budžetom
-      const { error: updateError } = await supabase
+      // 4. UPDATE "Korisnici"
+      await supabase
         .from("Korisnici")
         .update({ current_balance: noviBudzet })
         .eq("id", user.id);
 
-      if (updateError) throw updateError;
+      // 5. NOTIFIKACIJE
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Trošak dodat! ✅",
+          body: `Zabeleženo: ${iznos} EUR u kategoriji ${odabranaKategorija}.`,
+        },
+        trigger: null,
+      });
 
-      Alert.alert("Uspeh", "Trošak je uspešno zabeležen i budžet je ažuriran!");
+      // Provera limita za kategoriju
+      if (limitData && noviBudzet < limitData.limit_iznos) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Upozorenje! ⚠️",
+            body: `Prešli ste limit za ${odabranaKategorija}! Trenutno stanje: ${noviBudzet.toFixed(2)} EUR.`,
+          },
+          trigger: null,
+        });
+      }
+
+      Alert.alert("Uspeh", "Trošak je uspešno sačuvan!");
       handleDiscard();
     } catch (error: any) {
-      Alert.alert("Greška", "Čuvanje nije uspelo: " + error.message);
+      Alert.alert("Greška", error.message);
     } finally {
       setLoading(false);
     }
