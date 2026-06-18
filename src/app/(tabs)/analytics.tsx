@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { useTheme } from "../../ThemeContext";
 import { supabase } from "../supabaseClient";
@@ -125,12 +126,13 @@ export default function AnalyticsScreen() {
   }
 
   return (
-    <ScrollView
+    <SafeAreaView
       style={[
         styles.container,
         { backgroundColor: theme.background || "#111c24" },
       ]}
     >
+      <ScrollView style={{ flex: 1 }}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text || "#fff" }]}>
           Analitika Troškova 📊
@@ -219,14 +221,14 @@ export default function AnalyticsScreen() {
           </Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 60,
     paddingHorizontal: 24,
   },
   centerContainer: {

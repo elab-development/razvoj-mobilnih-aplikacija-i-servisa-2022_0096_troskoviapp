@@ -1,18 +1,19 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Keyboard,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../ThemeContext";
 import { supabase } from "../supabaseClient";
 
@@ -72,14 +73,14 @@ export default function BudgetsScreen() {
       if (planoviError) throw planoviError;
 
       // 2. Povuci sve troškove korisnika u poslednjih 90 dana radi računanja progresa
-      const drajdanaOdPre = new Date();
-      drajdanaOdPre.setDate(drajdanaOdPre.getDate() - 90);
+      const granicaDevedesetDana = new Date();
+      granicaDevedesetDana.setDate(granicaDevedesetDana.getDate() - 90);
 
       const { data: troskovi, error: troskoviError } = await supabase
         .from("troskovi")
         .select("iznos, kategorija, datum")
         .eq("user_id", user.id)
-        .gte("datum", drajdanaOdPre.toISOString());
+        .gte("datum", granicaDevedesetDana.toISOString());
 
       if (troskoviError) throw troskoviError;
 
@@ -195,7 +196,9 @@ export default function BudgetsScreen() {
   const placeholderTextColor = isDarkMode ? "#64748b" : "#94a3b8";
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
       {/* Forma za dodavanje novog plana */}
       <View
         style={[
@@ -409,14 +412,13 @@ export default function BudgetsScreen() {
           }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 50,
     paddingHorizontal: 20,
   },
   formCard: {

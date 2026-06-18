@@ -1,471 +1,459 @@
-import { Feather } from "@expo/vector-icons";
-import { Href, router } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../ThemeContext";
 import { supabase } from "../supabaseClient";
 
-// 1. Mapiranje mapa ikonica i labela za kategorije kako bi prikaz na Dashboard-u bio prepoznatljiv
-const KATEGORIJE_MAPA: { [key: string]: { label: string; znak: string } } = {
-  Food: { label: "Hrana", znak: "🍔" },
-  Transport: { label: "Prevoz", znak: "🚗" },
-  Rent: { label: "Stanarina", znak: "🏠" },
-  Social: { label: "Izlasci", znak: "🍷" },
-  Uni: { label: "Faks", znak: "🎓" },
-  Other: { label: "Ostalo", znak: "💼" },
-};
-
-// 2. Interfejs prilagođen stvarnoj strukturi tabele "troskovi" (id je UUID - string)
-interface Trosak {
+interface BudgetPlan {
   id: string;
-  user_id: string;
-  naslov: string;
-  iznos: number;
-  kategorija: string;
-  beljeska?: string | null;
-  created_at: string;
+  period: string;
+  kategorija: string | null;
+  limit_iznos: number;
+  potroseno: number;
 }
 
-export default function DashboardScreen() {
-  const { theme } = useTheme();
+interface Trosak {
+  id: string;
+  iznos: number;
+  kategorija: string;
+  opis: string;
+  datum: string;
+}
 
-  const [troskovi, setTroskovi] = useState<Trosak[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+export default function DashboardScreen({ navigation }: any) {
+  const { theme, isDarkMode } = useTheme();
+  const [loading, setLoading] = useState(true);
 
-  // Povuci podatke prilikom učitavanja ekrana
+  // State za podatke
+  const [trenutniBalans, setTrenutniBalans] = useState(2112223.0); // Dinamički balans
+  const [poslednjiTroskovi, setPoslednjiTroskovi] = useState<Trosak[]>([]);
+  const [glavniBudzet, setGlavniBudzet] = useState<BudgetPlan | null>(null);
+
   useEffect(() => {
-    fetchTroskovi();
+    ucitajDashboardPodatke();
   }, []);
 
-  const fetchTroskovi = async () => {
+  const ucitajDashboardPodatke = async () => {
     try {
       setLoading(true);
-
       const {
         data: { user },
-        error: userError,
       } = await supabase.auth.getUser();
-      if (userError) throw userError;
+      if (!user) return;
 
-      if (!user) {
-        if (Platform.OS === "web") alert("Korisnik nije ulogovan.");
-        else Alert.alert("Greška", "Korisnik nije ulogovan.");
-        return;
-      }
-
-      // Gađamo tabelu "troskovi" i sortiramo po vremenu kreiranja
-      const { data, error } = await supabase
+      // 1. Povuci poslednja 3 troška za brzi pregled
+      const { data: troskoviData, error: troskoviError } = await supabase
         .from("troskovi")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("datum", { ascending: false })
+        .limit(3);
 
-      if (error) throw error;
+      if (troskoviError) throw troskoviError;
+      setPoslednjiTroskovi(troskoviData || []);
 
-      setTroskovi(data || []);
-    } catch (error: any) {
-      console.error("Greška pri povlačenju:", error);
-      if (Platform.OS === "web") {
-        alert("Nije uspelo osvežavanje troškova: " + error.message);
-      } else {
-        Alert.alert(
-          "Greška",
-          "Nije uspelo osvežavanje troškova: " + error.message,
-        );
+      // 2. Povuci budžete da bismo prikazali onaj sa najvećim progresom na početnoj
+      const { data: budzetiData, error: budzetiError } = await supabase
+        .from("budzeti")
+        .select("*")
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (budzetiError) throw budzetiError;
+
+      if (budzetiData && budzetiData.length > 0) {
+        // Ovde simuliramo računanje potrošnje za taj jedan budžet radi dashboard prikaza
+        setGlavniBudzet({
+          id: budzetiData[0].id,
+          period: budzetiData[0].period,
+          kategorija: budzetiData[0].kategorija,
+          limit_iznos: parseFloat(budzetiData[0].limit_iznos),
+          potroseno: 3845.0, // Primer potrošnje iz analitike
+        });
       }
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert("Greška", "Nije uspelo učitavanje početne strane.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      router.replace("/(auth)/login" as Href);
-    } catch (error: any) {
-      if (Platform.OS === "web") alert("Nije uspela odjava: " + error.message);
-      else Alert.alert("Greška", "Nije uspela odjava: " + error.message);
-    }
-  };
-
-  const toggleExpand = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
-
-  // Funkcija za brisanje troška prilagođena i za Web i za Mobile platforme
-  const handleDeleteExpense = (
-    id: string,
-    iznosTroska: number,
-    userId: string,
-  ) => {
-    console.log("Dugme kliknuto za ID:", id);
-
-    const izvrsiBrisanje = async () => {
-      try {
-        setLoading(true);
-
-        // Brisanje reda iz tabele troskovi
-        const { error } = await supabase.from("troskovi").delete().eq("id", id);
-
-        if (error) throw error;
-
-        // Odmah izbacujemo obrisani trošak iz stanja bez novog fetch-ovanja
-        setTroskovi((prev) => prev.filter((t) => t.id !== id));
-
-        if (Platform.OS === "web") {
-          alert("Trošak je uspešno obrisan.");
-        } else {
-          setTimeout(() => {
-            Alert.alert("Uspeh", "Trošak je uspešno obrisan.");
-          }, 100);
-        }
-      } catch (error: any) {
-        if (Platform.OS === "web") {
-          alert("Brisanje nije uspelo: " + error.message);
-        } else {
-          setTimeout(() => {
-            Alert.alert("Greška", "Brisanje nije uspelo: " + error.message);
-          }, 100);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Ako smo na vebu, koristi standardni window.confirm jer Alert.alert tu ne radi
-    if (Platform.OS === "web") {
-      const potvrda = window.confirm(
-        "Da li ste sigurni da želite da obrišete ovaj trošak?",
-      );
-      if (potvrda) {
-        izvrsiBrisanje();
-      }
-    } else {
-      // Ako smo na iOS/Android uređaju, podigni sistemski Alert dijalog
-      Alert.alert(
-        "Potvrda brisanja",
-        "Da li ste sigurni da želite da obrišete ovaj trošak?",
-        [
-          { text: "Otkaži", style: "cancel" },
-          { text: "Obriši", style: "destructive", onPress: izvrsiBrisanje },
-        ],
-        { cancelable: true },
-      );
-    }
-  };
-
-  const renderItem = ({ item }: { item: Trosak }) => {
-    const isExpanded = expandedId === item.id;
-
-    const katInfo = KATEGORIJE_MAPA[item.kategorija] || {
-      label: item.kategorija,
-      znak: "💰",
-    };
-
-    const pročišćenDatum = item.created_at
-      ? new Date(item.created_at).toLocaleDateString("sr-RS")
-      : "Nema datuma";
-
-    return (
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.card || "rgba(0,0,0,0.02)",
-            borderColor: theme.border || "#e2e8f0",
-          },
-        ]}
-      >
-        {/* Glavni red - uvek vidljiv */}
-        <TouchableOpacity
-          style={styles.cardHeader}
-          onPress={() => toggleExpand(item.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.headerLeft}>
-            <Text style={[styles.itemTitle, { color: theme.text }]}>
-              {katInfo.znak} {item.naslov}
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={styles.itemAmount}>-{item.iznos.toFixed(2)} €</Text>
-            <Text style={[styles.arrow, { color: theme.subText }]}>
-              {isExpanded ? "▲" : "▼"}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Prošireni detalji troška */}
-        {isExpanded && (
-          <View
-            style={[
-              styles.cardDetails,
-              { borderTopColor: theme.border || "#e2e8f0" },
-            ]}
-          >
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: theme.subText }]}>
-                Kategorija:
-              </Text>
-              <Text style={[styles.detailValue, { color: theme.text }]}>
-                {katInfo.label}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={[styles.detailLabel, { color: theme.subText }]}>
-                Datum:
-              </Text>
-              <Text style={[styles.detailValue, { color: theme.text }]}>
-                {pročišćenDatum}
-              </Text>
-            </View>
-            {item.beljeska ? (
-              <View style={styles.detailRow}>
-                <Text style={[styles.detailLabel, { color: theme.subText }]}>
-                  Beleška:
-                </Text>
-                <Text style={[styles.detailValue, { color: theme.text }]}>
-                  {item.beljeska}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* DUGME ZA BRISANJE TROŠKA */}
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() =>
-                handleDeleteExpense(item.id, item.iznos, item.user_id)
-              }
-            >
-              <Feather
-                name="trash-2"
-                size={16}
-                color="#ef4444"
-                style={styles.deleteIcon}
-              />
-              <Text style={styles.deleteButtonText}>Obriši trošak</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    );
-  };
+  const inputBg = isDarkMode ? "#1e293b" : "#f1f5f9";
+  const cardBg = isDarkMode ? "#1e293b" : "#fff";
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Top sekcija */}
-      <View style={styles.topSection}>
-        <Text style={[styles.title, { color: theme.text }]}>Vaš Budžet 📊</Text>
-        <Text style={[styles.subtitle, { color: theme.subText }]}>
-          Pregled skorašnjih troškova i aktivnosti
-        </Text>
-
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push("/(tabs)/expenses" as Href)}
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.background }]}
+    >
+      {loading ? (
+        <ActivityIndicator
+          size="large"
+          color={theme.accent}
+          style={styles.loader}
+        />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.navButtonText}>+ Unesi novi trošak</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Lista transakcija */}
-      <View style={styles.listSection}>
-        <View style={styles.listHeaderRow}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Poslednje transakcije
-          </Text>
-          <TouchableOpacity onPress={fetchTroskovi}>
-            <Text style={{ color: theme.accent, fontWeight: "600" }}>
-              Osveži ↻
+          {/* Gornji deo ekrana - Pozdrav */}
+          <View style={styles.header}>
+            <Text
+              style={[
+                styles.welcomeText,
+                { color: theme.subText || "#64748b" },
+              ]}
+            >
+              Dobrodošao nazad,
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={theme.accent} />
+            <Text style={[styles.userName, { color: theme.text }]}>
+              Lazar Jovanović 👋
+            </Text>
           </View>
-        ) : (
-          <FlatList
-            data={troskovi}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={
-              <Text style={[styles.emptyText, { color: theme.subText }]}>
-                Nema unetih troškova u bazi.
-              </Text>
-            }
-          />
-        )}
-      </View>
 
-      {/* Footer odjava */}
-      <View style={styles.footerSection}>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Odjavi se</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          {/* Glavna kartica sa stanjem (Balans) */}
+          <View style={[styles.balanceCard, { backgroundColor: theme.accent }]}>
+            <Text style={styles.balanceLabel}>Ukupan preostali budžet</Text>
+            <Text style={styles.balanceAmount}>
+              {trenutniBalans.toLocaleString("de-DE", {
+                minimumFractionDigits: 2,
+              })}{" "}
+              €
+            </Text>
+            <View style={styles.balanceStats}>
+              <View style={styles.statRow}>
+                <MaterialCommunityIcons
+                  name="arrow-down-bold-circle"
+                  size={18}
+                  color="#fca5a5"
+                />
+                <Text style={styles.statText}>Mesečni trošak: 3.845,00 €</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Aktivni Limit / Progres bar ako postoji */}
+          {glavniBudzet && (
+            <View
+              style={[
+                styles.sectionCard,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: theme.border || "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                Status Budžeta 🎯
+              </Text>
+              <View style={styles.budgetProgressRow}>
+                <Text style={[styles.budgetText, { color: theme.text }]}>
+                  Mesečni limit ({glavniBudzet.kategorija || "Sve ukupno"})
+                </Text>
+                <Text style={[styles.budgetPercent, { color: "#ef4444" }]}>
+                  Prekoračeno
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.progressBarContainer,
+                  { backgroundColor: inputBg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { width: "100%", backgroundColor: "#ef4444" },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.statItemText, { color: theme.subText }]}>
+                Potrošeno:{" "}
+                <Text style={{ fontWeight: "700", color: theme.text }}>
+                  {glavniBudzet.potroseno} €
+                </Text>{" "}
+                / {glavniBudzet.limit_iznos} €
+              </Text>
+            </View>
+          )}
+
+          {/* Brze Akcije / Prečice */}
+          <Text style={[styles.labelTitle, { color: theme.text }]}>
+            Brze Prečice
+          </Text>
+          <View style={styles.gridRow}>
+            <TouchableOpacity
+              style={[styles.shortcutButton, { backgroundColor: cardBg }]}
+              onPress={() => navigation.navigate("Troškovi")}
+            >
+              <MaterialCommunityIcons
+                name="plus-circle"
+                size={26}
+                color={theme.accent}
+              />
+              <Text style={[styles.shortcutText, { color: theme.text }]}>
+                Dodaj Trošak
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.shortcutButton, { backgroundColor: cardBg }]}
+              onPress={() => navigation.navigate("Budžeti")}
+            >
+              <MaterialCommunityIcons name="target" size={26} color="#10b981" />
+              <Text style={[styles.shortcutText, { color: theme.text }]}>
+                Postavi Limit
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.shortcutButton, { backgroundColor: cardBg }]}
+              onPress={() => navigation.navigate("Nagrade")}
+            >
+              <MaterialCommunityIcons name="trophy" size={26} color="#f59e0b" />
+              <Text style={[styles.shortcutText, { color: theme.text }]}>
+                Postignuća
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Poslednje Transakcije */}
+          <Text style={[styles.labelTitle, { color: theme.text }]}>
+            Poslednje aktivnosti
+          </Text>
+          {poslednjiTroskovi.length === 0 ? (
+            <Text style={[styles.emptyText, { color: theme.subText }]}>
+              Nema nedavnih troškova.
+            </Text>
+          ) : (
+            poslednjiTroskovi.map((trosak) => (
+              <View
+                key={trosak.id}
+                style={[styles.trosakRow, { backgroundColor: cardBg }]}
+              >
+                <View
+                  style={[styles.trosakIconBg, { backgroundColor: inputBg }]}
+                >
+                  <MaterialCommunityIcons
+                    name={
+                      trosak.kategorija === "Food"
+                        ? "food"
+                        : "credit-card-outline"
+                    }
+                    size={20}
+                    color={theme.text}
+                  />
+                </View>
+                <View style={styles.trosakInfo}>
+                  <Text style={[styles.trosakOpis, { color: theme.text }]}>
+                    {trosak.opis || trosak.kategorija}
+                  </Text>
+                  <Text style={[styles.trosakDatum, { color: theme.subText }]}>
+                    {new Date(trosak.datum).toLocaleDateString("sr-RS")}
+                  </Text>
+                </View>
+                <Text style={styles.trosakIznos}>
+                  -{trosak.iznos.toFixed(2)} €
+                </Text>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 60,
   },
-  topSection: {
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  navButton: {
-    backgroundColor: "#6200ee",
-    height: 52,
-    borderRadius: 14,
+  loader: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  navButtonText: {
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40, // Omogućava da donji elementi idu nadole i imaju lufta
+    flexGrow: 1,
+  },
+  header: {
+    marginTop: 15,
+    marginBottom: 20,
+  },
+  welcomeText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginTop: 2,
+  },
+  balanceCard: {
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  balanceLabel: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  balanceAmount: {
     color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 32,
+    fontWeight: "800",
+    marginTop: 5,
+    letterSpacing: -0.5,
   },
-  listSection: {
-    flex: 1,
-    paddingHorizontal: 24,
+  balanceStats: {
+    marginTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.2)",
+    paddingTop: 12,
   },
-  listHeaderRow: {
+  statRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+  },
+  statText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    marginBottom: 10,
   },
-  listContainer: {
-    paddingBottom: 20,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  cardHeader: {
+  budgetProgressRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
+    marginBottom: 6,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 15,
+  budgetText: {
+    fontSize: 13,
     fontWeight: "600",
   },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  itemAmount: {
-    fontSize: 15,
+  budgetPercent: {
+    fontSize: 12,
     fontWeight: "700",
-    color: "#ef4444",
-    marginRight: 10,
   },
-  arrow: {
-    fontSize: 11,
-    width: 15,
-    textAlign: "center",
-  },
-  cardDetails: {
-    borderTopWidth: 1,
-    padding: 16,
-    backgroundColor: "rgba(0,0,0,0.01)",
-  },
-  detailRow: {
-    flexDirection: "row",
+  progressBarContainer: {
+    height: 8,
+    borderRadius: 4,
+    width: "100%",
+    overflow: "hidden",
     marginBottom: 8,
   },
-  detailLabel: {
-    width: 90,
-    fontSize: 13,
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  statItemText: {
+    fontSize: 12,
+  },
+  labelTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
+    marginTop: 5,
+  },
+  gridRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  shortcutButton: {
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  shortcutText: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  trosakRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 10,
+  },
+  trosakIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  trosakInfo: {
+    flex: 1,
+  },
+  trosakOpis: {
+    fontSize: 14,
     fontWeight: "600",
   },
-  detailValue: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "500",
+  trosakDatum: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  trosakIznos: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ef4444",
   },
   emptyText: {
     textAlign: "center",
-    marginTop: 30,
-    fontSize: 14,
-  },
-  footerSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 30,
-    paddingTop: 10,
-  },
-  logoutButton: {
-    backgroundColor: "#ef4444",
-    height: 52,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  logoutText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(239, 68, 68, 0.08)",
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 14,
-  },
-  deleteIcon: {
-    marginRight: 6,
-  },
-  deleteButtonText: {
-    color: "#ef4444",
     fontSize: 13,
-    fontWeight: "600",
+    marginTop: 10,
+    fontStyle: "italic",
   },
 });

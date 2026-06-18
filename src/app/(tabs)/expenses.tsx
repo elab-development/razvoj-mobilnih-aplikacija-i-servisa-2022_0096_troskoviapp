@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../ThemeContext";
 import { supabase } from "../supabaseClient";
 
@@ -63,7 +64,7 @@ export default function ExpensesScreen() {
         .single();
       if (profilError) throw profilError;
 
-      // 2. Povuci limit (osiguraj da je limit_iznos broj)
+      // 2. Povuci limit
       const { data: limitData } = await supabase
         .from("budzeti")
         .select("limit_iznos")
@@ -82,7 +83,7 @@ export default function ExpensesScreen() {
           naslov: naslov.trim(),
           iznos: trosakIznos,
           kategorija: odabranaKategorija,
-          datum: new Date().toISOString(), // Standardizovan format datuma
+          datum: new Date().toISOString(),
           beljeska: beljeska.trim() || null,
         },
       ]);
@@ -106,7 +107,7 @@ export default function ExpensesScreen() {
         trigger: null,
       });
 
-      // Provera limita
+      // TODO: Prilagoditi proveri kategorijalnog limita u zavisnosti od arhitekture baze
       if (limitIznos !== null && noviBudzet < limitIznos) {
         await Notifications.scheduleNotificationAsync({
           content: {
@@ -120,12 +121,13 @@ export default function ExpensesScreen() {
       Alert.alert("Uspeh", "Trošak je uspešno sačuvan!");
       handleDiscard();
     } catch (error: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); // Vibracija za grešku
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Greška", error.message);
     } finally {
       setLoading(false);
     }
   };
+
   const handleDiscard = () => {
     setIznos("");
     setNaslov("");
@@ -136,141 +138,148 @@ export default function ExpensesScreen() {
 
   const inputBg = isDarkMode ? "#1e293b" : "#f1f5f9";
   const placeholderTextColor = isDarkMode ? "#64748b" : "#94a3b8";
-  const labelTextColor = isDarkMode ? "#94a3b8" : "#475569";
+  const labelTextColor = isDarkMode ? "#475569" : "#94a3b8";
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <Text style={[styles.headerQuestion, { color: labelTextColor }]}>
-          Koliko ste potrošili?
-        </Text>
-
-        <View
-          style={[styles.amountWrapper, { borderBottomColor: theme.accent }]}
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.currencySymbol, { color: theme.text }]}>€</Text>
-          <TextInput
-            style={[styles.amountInput, { color: theme.text }]}
-            placeholder="0.00"
-            placeholderTextColor={placeholderTextColor}
-            keyboardType="numeric"
-            value={iznos}
-            onChangeText={(text) => setIznos(text)}
-          />
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="bubble-chart" size={18} color={theme.accent} />
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            {" "}
-            Detalji troška
+          <Text style={[styles.headerQuestion, { color: labelTextColor }]}>
+            Koliko ste potrošili?
           </Text>
-        </View>
 
-        <Text style={[styles.fieldLabel, { color: labelTextColor }]}>
-          Šta ste kupili?
-        </Text>
-        <View style={[styles.inputContainer, { backgroundColor: inputBg }]}>
-          <MaterialCommunityIcons
-            name="compass-outline"
-            size={18}
-            color={placeholderTextColor}
-            style={styles.inputIcon}
-          />
-          <TextInput
-            style={[styles.textInput, { color: theme.text }]}
-            placeholder="npr. Kupovina namirnica"
-            placeholderTextColor={placeholderTextColor}
-            value={naslov}
-            onChangeText={(text) => setNaslov(text)}
-          />
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="grain" size={18} color={theme.accent} />
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            {" "}
-            Kategorija
-          </Text>
-        </View>
-
-        <View style={styles.categoriesGrid}>
-          {KATEGORIJE.map((cat) => {
-            const isSelected = odabranaKategorija === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[
-                  styles.categoryButton,
-                  { backgroundColor: inputBg },
-                  isSelected && { backgroundColor: theme.accent },
-                ]}
-                onPress={() => setOdabranaKategorija(cat.id)}
-              >
-                <MaterialCommunityIcons
-                  name={cat.icon as any}
-                  size={15}
-                  color={isSelected ? "#fff" : theme.text}
-                />
-                <Text
-                  style={[
-                    styles.categoryButtonText,
-                    { color: isSelected ? "#fff" : theme.text },
-                  ]}
-                >
-                  {" "}
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="notes" size={18} color={theme.accent} />
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            {" "}
-            Beleška (Opciono)
-          </Text>
-        </View>
-        <View style={[styles.inputContainer, { backgroundColor: inputBg }]}>
-          <TextInput
-            style={[styles.textInput, { color: theme.text }]}
-            placeholder="Dodajte napomenu..."
-            placeholderTextColor={placeholderTextColor}
-            value={beljeska}
-            onChangeText={(text) => setBeljeska(text)}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: theme.accent }]}
-          onPress={handleSaveExpense}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={[styles.saveButtonText, { color: "#fff" }]}>
-              Sačuvaj trošak
+          <View
+            style={[styles.amountWrapper, { borderBottomColor: theme.accent }]}
+          >
+            <Text style={[styles.currencySymbol, { color: theme.text }]}>
+              €
             </Text>
-          )}
-        </TouchableOpacity>
+            <TextInput
+              style={[styles.amountInput, { color: theme.text }]}
+              placeholder="0.00"
+              placeholderTextColor={placeholderTextColor}
+              keyboardType="numeric"
+              value={iznos}
+              onChangeText={(text) => setIznos(text)}
+            />
+          </View>
 
-        <TouchableOpacity style={styles.discardButton} onPress={handleDiscard}>
-          <Text style={[styles.discardButtonText, { color: labelTextColor }]}>
-            Poništi
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="bubble-chart" size={18} color={theme.accent} />
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              {" "}
+              Detalji troška
+            </Text>
+          </View>
+
+          <Text style={[styles.fieldLabel, { color: labelTextColor }]}>
+            Šta ste kupili?
           </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={[styles.inputContainer, { backgroundColor: inputBg }]}>
+            <MaterialCommunityIcons
+              name="compass-outline"
+              size={18}
+              color={placeholderTextColor}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[styles.textInput, { color: theme.text }]}
+              placeholder="npr. Kupovina namirnica"
+              placeholderTextColor={placeholderTextColor}
+              value={naslov}
+              onChangeText={(text) => setNaslov(text)}
+            />
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="grain" size={18} color={theme.accent} />
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              {" "}
+              Kategorija
+            </Text>
+          </View>
+
+          <View style={styles.categoriesGrid}>
+            {KATEGORIJE.map((cat) => {
+              const isSelected = odabranaKategorija === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryButton,
+                    { backgroundColor: inputBg },
+                    isSelected && { backgroundColor: theme.accent },
+                  ]}
+                  onPress={() => setOdabranaKategorija(cat.id)}
+                >
+                  <MaterialCommunityIcons
+                    name={cat.icon as any}
+                    size={15}
+                    color={isSelected ? "#fff" : theme.text}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryButtonText,
+                      { color: isSelected ? "#fff" : theme.text },
+                    ]}
+                  >
+                    {" "}
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <MaterialIcons name="notes" size={18} color={theme.accent} />
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              {" "}
+              Beleška (Opciono)
+            </Text>
+          </View>
+          <View style={[styles.inputContainer, { backgroundColor: inputBg }]}>
+            <TextInput
+              style={[styles.textInput, { color: theme.text }]}
+              placeholder="Dodajte napomenu..."
+              placeholderTextColor={placeholderTextColor}
+              value={beljeska}
+              onChangeText={(text) => setBeljeska(text)}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.saveButton, { backgroundColor: theme.accent }]}
+            onPress={handleSaveExpense}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={[styles.saveButtonText, { color: "#fff" }]}>
+                Sačuvaj trošak
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.discardButton}
+            onPress={handleDiscard}
+          >
+            <Text style={[styles.discardButtonText, { color: labelTextColor }]}>
+              Poništi
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
