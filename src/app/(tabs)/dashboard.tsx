@@ -72,7 +72,7 @@ export default function DashboardScreen({ navigation }: any) {
       if (budzetiError) throw budzetiError;
 
       if (budzetiData && budzetiData.length > 0) {
-        // Ovde simuliramo računanje potrošnje za taj jedan budžet radi dashboard prikaza
+        // Ovde povlačimo podatke i osiguravamo tipove podataka kroz parseFloat
         setGlavniBudzet({
           id: budzetiData[0].id,
           period: budzetiData[0].period,
@@ -91,6 +91,25 @@ export default function DashboardScreen({ navigation }: any) {
 
   const inputBg = isDarkMode ? "#1e293b" : "#f1f5f9";
   const cardBg = isDarkMode ? "#1e293b" : "#fff";
+
+  // --- DINAMIČKA LOGIKA ZA STATUS BUDŽETA ---
+  let procenatProgresa = 0;
+  let jePrekoraceno = false;
+  let statusTekst = "U okviru limita";
+  let statusBoja = "#10b981"; // Zelena boja po defaultu
+
+  if (glavniBudzet) {
+    const potrosenoNum = Math.abs(glavniBudzet.potroseno);
+    const limitNum = glavniBudzet.limit_iznos;
+
+    jePrekoraceno = potrosenoNum > limitNum;
+    statusTekst = jePrekoraceno ? "Prekoračeno" : "U okviru limita";
+    statusBoja = jePrekoraceno ? "#ef4444" : "#10b981"; // Crvena ako je prešao limit, zelena ako nije
+
+    // Računanje procenta širine (maksimalno do 100%)
+    procenatProgresa =
+      limitNum > 0 ? Math.min((potrosenoNum / limitNum) * 100, 100) : 0;
+  }
 
   return (
     <SafeAreaView
@@ -143,7 +162,7 @@ export default function DashboardScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Aktivni Limit / Progres bar ako postoji */}
+          {/* Aktivni Limit / Progres bar koji sada ispravno radi */}
           {glavniBudzet && (
             <View
               style={[
@@ -161,8 +180,9 @@ export default function DashboardScreen({ navigation }: any) {
                 <Text style={[styles.budgetText, { color: theme.text }]}>
                   Mesečni limit ({glavniBudzet.kategorija || "Sve ukupno"})
                 </Text>
-                <Text style={[styles.budgetPercent, { color: "#ef4444" }]}>
-                  Prekoračeno
+                {/* Dinamički tekst i dinamička boja statusa */}
+                <Text style={[styles.budgetPercent, { color: statusBoja }]}>
+                  {statusTekst}
                 </Text>
               </View>
               <View
@@ -171,19 +191,30 @@ export default function DashboardScreen({ navigation }: any) {
                   { backgroundColor: inputBg },
                 ]}
               >
+                {/* Dinamička širina i dinamička boja staze */}
                 <View
                   style={[
                     styles.progressBarFill,
-                    { width: "100%", backgroundColor: "#ef4444" },
+                    {
+                      width: `${procenatProgresa}%`,
+                      backgroundColor: statusBoja,
+                    },
                   ]}
                 />
               </View>
               <Text style={[styles.statItemText, { color: theme.subText }]}>
                 Potrošeno:{" "}
                 <Text style={{ fontWeight: "700", color: theme.text }}>
-                  {glavniBudzet.potroseno} €
+                  {glavniBudzet.potroseno.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
                 </Text>{" "}
-                / {glavniBudzet.limit_iznos} €
+                /{" "}
+                {glavniBudzet.limit_iznos.toLocaleString("de-DE", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                €
               </Text>
             </View>
           )}
@@ -286,7 +317,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40, // Omogućava da donji elementi idu nadole i imaju lufta
+    paddingBottom: 40,
     flexGrow: 1,
   },
   header: {

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -22,13 +22,17 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const [ukupnoPotroseno, setUkupnoPotroseno] = useState<number>(0);
   const [preostaliBudzet, setPreostaliBudzet] = useState<number>(0);
-  const [procenatPotroseno, setProcenatPotroseno] = useState<number>(0);
+  const [procenatPotrosenoLimit, setProcenatPotrosenoLimit] =
+    useState<number>(0);
+  const [procenatPotrosenoBudzet, setProcenatPotrosenoBudzet] =
+    useState<number>(0);
 
   const PODRAZUMEVANI_BUDZET = 500;
+  const MESECNI_LIMIT = 5000;
 
-  // Podešavanja za SVG kružni grafikon
-  const size = 200;
-  const strokeWidth = 18;
+  // Dimenzije za manje grafikone kako bi stali jedan pored drugog
+  const size = 140;
+  const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
 
@@ -74,13 +78,19 @@ export default function AnalyticsScreen() {
       if (troskoviError) throw troskoviError;
 
       const sumaTroskova = (troskovi || []).reduce(
-        (acc, curr) => acc + (curr.iznos || 0),
+        (acc, curr) => acc + Math.abs(parseFloat(curr.iznos || 0)),
         0,
       );
 
-      const ukupanPocetniBudzet = trenutniPreostaliBudzet + sumaTroskova;
+      // 1. Procenat potrošnje u odnosu na Mesečni Limit
+      const izracunatProcenatLimit =
+        MESECNI_LIMIT > 0
+          ? Math.min(Math.round((sumaTroskova / MESECNI_LIMIT) * 100), 100)
+          : 0;
 
-      const izracunatProcenat =
+      // 2. Procenat potrošnje u odnosu na Ukupni Budžet (Balans + Troškovi)
+      const ukupanPocetniBudzet = trenutniPreostaliBudzet + sumaTroskova;
+      const izracunatProcenatBudzet =
         ukupanPocetniBudzet > 0
           ? Math.min(
               Math.round((sumaTroskova / ukupanPocetniBudzet) * 100),
@@ -92,7 +102,8 @@ export default function AnalyticsScreen() {
       setPreostaliBudzet(
         trenutniPreostaliBudzet < 0 ? 0 : trenutniPreostaliBudzet,
       );
-      setProcenatPotroseno(izracunatProcenat);
+      setProcenatPotrosenoLimit(izracunatProcenatLimit);
+      setProcenatPotrosenoBudzet(izracunatProcenatBudzet);
     } catch (error: any) {
       console.error("Greška u analitici:", error);
       if (Platform.OS === "web") {
@@ -108,9 +119,12 @@ export default function AnalyticsScreen() {
     }
   };
 
-  // Izračunavanje dokle se iscrtava crveni prsten potrošnje
-  const strokeDashoffset =
-    circumference - (procenatPotroseno / 100) * circumference;
+  // Izračunavanje staza za oba grafikona
+  const strokeDashoffsetLimit =
+    circumference - (procenatPotrosenoLimit / 100) * circumference;
+
+  const strokeDashoffsetBudzet =
+    circumference - (procenatPotrosenoBudzet / 100) * circumference;
 
   if (loading) {
     return (
@@ -132,95 +146,160 @@ export default function AnalyticsScreen() {
         { backgroundColor: theme.background || "#111c24" },
       ]}
     >
-      <ScrollView style={{ flex: 1 }}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text || "#fff" }]}>
-          Analitika Troškova 📊
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.subText || "#94a3b8" }]}>
-          Pregled stanja prilagođen tvom uređaju
-        </Text>
-      </View>
-
-      {/* MOBILNI DIZAJN: Kružni grafikon sa tekstom u centru */}
-      <View style={styles.chartContainer}>
-        <Svg width={size} height={size} style={styles.svg}>
-          {/* Pozadinski krug - Preostali budžet (Zelena staza) */}
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="#10b981"
-            strokeWidth={strokeWidth}
-            fill="transparent"
-          />
-          {/* Prednji krug - Potrošeni budžet (Crveni napredak) */}
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="#ef4444"
-            strokeWidth={strokeWidth}
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`} // Rotacija da krene od vrha
-          />
-        </Svg>
-
-        {/* Centrirani tekst unutar kruga */}
-        <View style={styles.absoluteCenter}>
-          <Text style={[styles.procenatText, { color: theme.text || "#fff" }]}>
-            {procenatPotroseno}%
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.text || "#fff" }]}>
+            Analitika Troškova 📊
           </Text>
           <Text
+            style={[styles.subtitle, { color: theme.subText || "#94a3b8" }]}
+          >
+            Pregled stanja prilagođen tvom uređaju
+          </Text>
+        </View>
+
+        {/* Kontejner koji poravnava dva grafikona jedan pored drugog */}
+        <View style={styles.chartsRow}>
+          {/* PRVI GRAFIKON: Troškovi / Limit (Plavo-Zeleni) */}
+          <View style={styles.chartWrapper}>
+            <View style={styles.chartContainer}>
+              <Svg width={size} height={size}>
+                <Circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="#ef4444"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                <Circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="#3b82f6" // Promenjeno u plavu boju prema tvom zahtevu
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffsetLimit}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                />
+              </Svg>
+              <View style={styles.absoluteCenter}>
+                <Text
+                  style={[styles.procenatText, { color: theme.text || "#fff" }]}
+                >
+                  {procenatPotrosenoLimit}%
+                </Text>
+              </View>
+            </View>
+            <Text
+              style={[styles.chartLabel, { color: theme.subText || "#94a3b8" }]}
+            >
+              Potrošeno / Limit
+            </Text>
+          </View>
+
+          {/* DRUGI GRAFIKON: Troškovi / Ukupan Budžet */}
+          <View style={styles.chartWrapper}>
+            <View style={styles.chartContainer}>
+              <Svg width={size} height={size}>
+                <Circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="#10b981"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                <Circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="#ef4444"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffsetBudzet}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                />
+              </Svg>
+              <View style={styles.absoluteCenter}>
+                <Text
+                  style={[styles.procenatText, { color: theme.text || "#fff" }]}
+                >
+                  {procenatPotrosenoBudzet}%
+                </Text>
+              </View>
+            </View>
+            <Text
+              style={[styles.chartLabel, { color: theme.subText || "#94a3b8" }]}
+            >
+              Potrošeno / Budžet
+            </Text>
+          </View>
+        </View>
+
+        {/* Indikatori i metrike */}
+        <View style={styles.statsSection}>
+          <View
             style={[
-              styles.procenatLabel,
-              { color: theme.subText || "#94a3b8" },
+              styles.statRow,
+              { borderBottomColor: theme.border || "#2e3b4e" },
             ]}
           >
-            potrošeno
-          </Text>
-        </View>
-      </View>
-
-      {/* Indikatori i metrike */}
-      <View style={styles.statsSection}>
-        <View
-          style={[
-            styles.statRow,
-            { borderBottomColor: theme.border || "#2e3b4e" },
-          ]}
-        >
-          <View style={styles.statLabelContainer}>
-            <View style={[styles.indicator, { backgroundColor: "#ef4444" }]} />
-            <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
-              Ukupno potrošeno:
+            <View style={styles.statLabelContainer}>
+              <View
+                style={[styles.indicator, { backgroundColor: "#3b82f6" }]}
+              />
+              <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
+                Mesečni limit:
+              </Text>
+            </View>
+            <Text style={[styles.statValue, { color: "#3b82f6" }]}>
+              {MESECNI_LIMIT.toFixed(2)} €
             </Text>
           </View>
-          <Text style={[styles.statValue, { color: "#ef4444" }]}>
-            -{ukupnoPotroseno.toFixed(2)} €
-          </Text>
-        </View>
 
-        <View
-          style={[
-            styles.statRow,
-            { borderBottomColor: theme.border || "#2e3b4e" },
-          ]}
-        >
-          <View style={styles.statLabelContainer}>
-            <View style={[styles.indicator, { backgroundColor: "#10b981" }]} />
-            <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
-              Preostali budžet (Trenutno):
+          <View
+            style={[
+              styles.statRow,
+              { borderBottomColor: theme.border || "#2e3b4e" },
+            ]}
+          >
+            <View style={styles.statLabelContainer}>
+              <View
+                style={[styles.indicator, { backgroundColor: "#ef4444" }]}
+              />
+              <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
+                Ukupno potrošeno:
+              </Text>
+            </View>
+            <Text style={[styles.statValue, { color: "#ef4444" }]}>
+              -{ukupnoPotroseno.toFixed(2)} €
             </Text>
           </View>
-          <Text style={[styles.statValue, { color: "#10b981" }]}>
-            {preostaliBudzet.toFixed(2)} €
-          </Text>
+
+          <View
+            style={[
+              styles.statRow,
+              { borderBottomColor: theme.border || "#2e3b4e" },
+            ]}
+          >
+            <View style={styles.statLabelContainer}>
+              <View
+                style={[styles.indicator, { backgroundColor: "#10b981" }]}
+              />
+              <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
+                Preostali budžet (Trenutno):
+              </Text>
+            </View>
+            <Text style={[styles.statValue, { color: "#10b981" }]}>
+              {preostaliBudzet.toFixed(2)} €
+            </Text>
+          </View>
         </View>
-      </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -230,6 +309,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
+    paddingTop: Platform.OS === "ios" ? 15 : 25,
   },
   centerContainer: {
     flex: 1,
@@ -237,24 +317,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   header: {
-    marginBottom: 40,
+    marginTop: 15,
+    marginBottom: 30,
   },
   title: {
-    fontSize: 26,
-    fontWeight: "700",
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  chartsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  chartWrapper: {
+    flex: 1,
+    alignItems: "center",
   },
   chartContainer: {
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
-    marginVertical: 20,
-  },
-  svg: {
-    transform: [{ scaleX: 1 }], // Osigurava stabilnost prikaza na oba OS-a
   },
   absoluteCenter: {
     position: "absolute",
@@ -262,43 +351,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   procenatText: {
-    fontSize: 38,
+    fontSize: 26, // Smanjen font da lepo stane u manji krug
     fontWeight: "800",
   },
-  procenatLabel: {
+  chartLabel: {
     fontSize: 13,
-    fontWeight: "500",
-    marginTop: 2,
+    fontWeight: "600",
+    marginTop: 12,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   statsSection: {
-    marginTop: 40,
+    marginTop: 30,
     marginBottom: 40,
   },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 18,
+    paddingVertical: 20,
     borderBottomWidth: 1,
   },
   statLabelContainer: {
     flexDirection: "row",
     alignItems: "center",
+    flex: 1,
   },
   indicator: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    marginRight: 10,
+    marginRight: 12,
   },
   statLabel: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
+    textAlign: "right",
+    marginLeft: 10,
   },
 });

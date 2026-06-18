@@ -37,12 +37,17 @@ export default function AchievementsScreen() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      // 1. Povuci trenutni balans (za milionera/multimilionera)
-      const { data: transakcije, error: transError } = await supabase
-        .from("transakcije") // Prilagodi ime tabele ako se zove drugacije
-        .select("iznos, tip");
+      // 1. Povuci balans direktno iz tabele Korisnici za ulogovanog korisnika
+      const { data: korisnikPodaci, error: korisnikError } = await supabase
+        .from("Korisnici")
+        .select("current_balance")
+        .eq("id", user.id)
+        .single();
 
       // 2. Povuci planove budžeta (za sertifikovanog planera)
       const { data: planovi, error: planoviError } = await supabase
@@ -61,19 +66,24 @@ export default function AchievementsScreen() {
         .eq("user_id", user.id)
         .gte("datum", pocetakMeseca.toISOString());
 
-      if (transError || planoviError || troskoviError) {
-        console.error("Greška pri povlačenju podataka za postignuća");
+      if (korisnikError || planoviError || troskoviError) {
+        console.log("Supabase error detalji:", {
+          korisnikError,
+          planoviError,
+          troskoviError,
+        });
       }
 
-      // Lažni/Izračunati podaci na osnovu baze za primer:
-      const trenutniBalans = 2112223; // Vrednost sa tvog skrinšota analitike
+      // Dinamičko uzimanje vrednosti iz baze uz bezbedan fallback na 0
+      const trenutniBalans = korisnikPodaci?.current_balance
+        ? parseFloat(korisnikPodaci.current_balance)
+        : 0;
       const imaPlan = (planovi && planovi.length > 0) || false;
 
-      const ukupnoPotrosenoUMesecu =
-        (troskoviMesec || []).reduce(
-          (acc, curr) => acc + (curr.iznos || 0),
-          0,
-        ) || 3845.0; // Vrednost sa tvog skrinšota
+      const ukupnoPotrosenoUMesecu = (troskoviMesec || []).reduce(
+        (acc, curr) => acc + Math.abs(parseFloat(curr.iznos || 0)),
+        0,
+      );
 
       const postignuca: Achievement[] = [
         {
@@ -113,13 +123,13 @@ export default function AchievementsScreen() {
 
       setListaNagrada(postignuca);
     } catch (error: any) {
+      console.log("Greška u try-catch bloku postignuća:", error.message);
       Alert.alert("Greška", "Nije uspelo učitavanje postignuća.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Komponenta za zaglavlje (Gornji tekst) - tako da ne bude zbijeno
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <Text style={[styles.title, { color: theme.text }]}>
@@ -224,12 +234,12 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40, // Daje praznog prostora na dnu za skrolovanje
+    paddingBottom: 40,
     flexGrow: 1,
   },
   headerContainer: {
     marginTop: 20,
-    marginBottom: 25, // Povećan razmak da gornji deo "prodiše"
+    marginBottom: 25,
   },
   title: {
     fontSize: 28,

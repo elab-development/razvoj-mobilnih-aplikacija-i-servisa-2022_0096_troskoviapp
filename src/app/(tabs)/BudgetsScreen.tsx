@@ -420,6 +420,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
+    // Dodat padding na vrhu koji rešava sabijenost ispod statusne linije i notch-a/kamere
+    paddingTop: Platform.OS === "ios" ? 16 : 8,
   },
   formCard: {
     borderWidth: 1,
