@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useState } from "react";
 import {
     ActivityIndicator,
@@ -22,10 +23,7 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo:
-          "razvojmobilnihaplikacijaiservisa20220096troskoviapp://reset-password",
-      });
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {});
 
       if (error) throw error;
 
@@ -104,6 +102,24 @@ export default function ForgotPasswordScreen() {
             Pošalji link
           </Text>
         )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => router.replace("/(auth)/login")}
+        style={{
+          marginTop: 20,
+        }}
+      >
+        <Text
+          style={{
+            textAlign: "center",
+            color: "#6200ee",
+            fontWeight: "600",
+            fontSize: 16,
+          }}
+        >
+          Nazad na prijavu
+        </Text>
       </TouchableOpacity>
     </View>
   );
