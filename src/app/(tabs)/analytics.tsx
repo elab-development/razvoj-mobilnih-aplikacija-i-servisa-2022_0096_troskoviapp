@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +30,7 @@ export default function AnalyticsScreen() {
 
   const PODRAZUMEVANI_BUDZET = 500;
   const MESECNI_LIMIT = 5000;
+  const [mesecniLimit, setMesecniLimit] = useState(0);
 
   // Dimenzije za manje grafikone kako bi stali jedan pored drugog
   const size = 140;
@@ -36,9 +38,11 @@ export default function AnalyticsScreen() {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
 
-  useEffect(() => {
-    izracunajAnalitiku();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      izracunajAnalitiku();
+    }, []),
+  );
 
   const izracunajAnalitiku = async () => {
     try {
@@ -62,6 +66,21 @@ export default function AnalyticsScreen() {
         .eq("id", user.id)
         .single();
 
+      const { data: budzet, error: budzetError } = await supabase
+        .from("budzeti")
+        .select("limit_iznos")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (budzetError && budzetError.code !== "PGRST116") {
+        console.warn("Budzet greska:", budzetError);
+      }
+
+      const limit = budzet?.limit_iznos || 0;
+      setMesecniLimit(limit);
+
       if (profilError && profilError.code !== "PGRST") {
         console.warn("Profil greška:", profilError);
       }
@@ -84,9 +103,7 @@ export default function AnalyticsScreen() {
 
       // 1. Procenat potrošnje u odnosu na Mesečni Limit
       const izracunatProcenatLimit =
-        MESECNI_LIMIT > 0
-          ? Math.min(Math.round((sumaTroskova / MESECNI_LIMIT) * 100), 100)
-          : 0;
+        limit > 0 ? Math.min(Math.round((sumaTroskova / limit) * 100), 100) : 0;
 
       // 2. Procenat potrošnje u odnosu na Ukupni Budžet (Balans + Troškovi)
       const ukupanPocetniBudzet = trenutniPreostaliBudzet + sumaTroskova;
@@ -258,7 +275,7 @@ export default function AnalyticsScreen() {
               </Text>
             </View>
             <Text style={[styles.statValue, { color: "#3b82f6" }]}>
-              {MESECNI_LIMIT.toFixed(2)} €
+              {mesecniLimit.toFixed(2)} €
             </Text>
           </View>
 

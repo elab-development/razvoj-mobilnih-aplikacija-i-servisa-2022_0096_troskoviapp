@@ -22,9 +22,9 @@ const customAsyncStorage = {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: customAsyncStorage, // Koristimo naš bezbedni omotač umesto direktnog AsyncStorage-a
+    storage: customAsyncStorage,
     autoRefreshToken: true,
-    persistSession: true,
+    persistSession: true, 
     detectSessionInUrl: false,
   },
 });

@@ -1,8 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router"; // DODATO
+import { useCallback, useState } from "react";
+
+import { router } from "expo-router";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,64 +28,105 @@ interface Trosak {
   id: string;
   iznos: number;
   kategorija: string;
-  opis: string;
+  naslov: string;
   datum: string;
 }
 
-export default function DashboardScreen({ navigation }: any) {
+export default function DashboardScreen() {
   const { theme, isDarkMode } = useTheme();
   const [loading, setLoading] = useState(true);
 
-  // State za podatke
-  const [trenutniBalans, setTrenutniBalans] = useState(2112223.0); // Dinamički balans
+  const [trenutniBalans, setTrenutniBalans] = useState(0);
+  const [ukupnoPotroseno, setUkupnoPotroseno] = useState(0);
   const [poslednjiTroskovi, setPoslednjiTroskovi] = useState<Trosak[]>([]);
   const [glavniBudzet, setGlavniBudzet] = useState<BudgetPlan | null>(null);
+  const [userName, setUserName] = useState("Korisnik"); // Default ime
 
-  useEffect(() => {
-    ucitajDashboardPodatke();
-  }, []);
+  // KORISTIMO useFocusEffect UMESTO useEffect
+  useFocusEffect(
+    useCallback(() => {
+      ucitajDashboardPodatke();
+    }, []),
+  );
 
   const ucitajDashboardPodatke = async () => {
     try {
       setLoading(true);
+
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      // 1. Povuci poslednja 3 troška za brzi pregled
-      const { data: troskoviData, error: troskoviError } = await supabase
-        .from("troskovi")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("datum", { ascending: false })
-        .limit(3);
-
-      if (troskoviError) throw troskoviError;
-      setPoslednjiTroskovi(troskoviData || []);
-
-      // 2. Povuci budžete da bismo prikazali onaj sa najvećim progresom na početnoj
-      const { data: budzetiData, error: budzetiError } = await supabase
-        .from("budzeti")
-        .select("*")
-        .eq("user_id", user.id)
-        .limit(1);
-
-      if (budzetiError) throw budzetiError;
-
-      if (budzetiData && budzetiData.length > 0) {
-        // Ovde povlačimo podatke i osiguravamo tipove podataka kroz parseFloat
-        setGlavniBudzet({
-          id: budzetiData[0].id,
-          period: budzetiData[0].period,
-          kategorija: budzetiData[0].kategorija,
-          limit_iznos: parseFloat(budzetiData[0].limit_iznos),
-          potroseno: 3845.0, // Primer potrošnje iz analitike
-        });
+      if (sessionError || !session?.user) {
+        router.replace("/(auth)/login");
+        return;
       }
-    } catch (error: any) {
-      console.error(error);
-      Alert.alert("Greška", "Nije uspelo učitavanje početne strane.");
+
+      const userId = session.user.id;
+
+      // 1. Povuci korisnika, troškove i BUDŽET paralelno
+      const [korisnikRes, troskoviRes] = await Promise.all([
+        supabase
+          .from("Korisnici")
+          .select("first_name, last_name, current_balance")
+          .eq("id", userId)
+          .single(),
+
+        supabase
+          .from("troskovi")
+          .select("*")
+          .eq("user_id", userId)
+          .order("datum", { ascending: false }),
+      ]);
+      const budzetiRes = await supabase.from("budzeti").select("*");
+
+      console.log("TEST BUDZETI:", budzetiRes);
+      console.log("USER:", korisnikRes);
+      console.log("TROSKOVI:", troskoviRes);
+      console.log("BUDZETI:", budzetiRes);
+      console.log("USER ID:", userId);
+      console.log("KORISNIK:", korisnikRes.data);
+      console.log("BUDZETI DATA:", budzetiRes.data);
+      console.log("TROSKOVI DATA:", troskoviRes.data);
+
+      // Obrada imena
+      if (korisnikRes.data) {
+        setUserName(
+          `${korisnikRes.data.first_name} ${korisnikRes.data.last_name}`,
+        );
+
+        setTrenutniBalans(Number(korisnikRes.data.current_balance) || 0);
+      }
+
+      // Obrada troškova
+      const sviTroskovi = troskoviRes.data || [];
+
+      setPoslednjiTroskovi(sviTroskovi.slice(0, 3));
+
+      const ukupno = sviTroskovi.reduce(
+        (sum, trosak) => sum + Number(trosak.iznos || 0),
+        0,
+      );
+
+      setUkupnoPotroseno(ukupno);
+
+      // Obrada budžeta
+      if (budzetiRes.data && budzetiRes.data.length > 0) {
+        const b = budzetiRes.data[0];
+
+        setGlavniBudzet({
+          id: b.id,
+          period: b.period,
+          kategorija: b.kategorija,
+          limit_iznos: Number(b.limit_iznos),
+          potroseno: ukupnoPotroseno,
+        });
+      } else {
+        setGlavniBudzet(null);
+      }
+    } catch (error) {
+      console.error("Greška:", error);
     } finally {
       setLoading(false);
     }
@@ -137,7 +180,7 @@ export default function DashboardScreen({ navigation }: any) {
               Dobrodošao nazad,
             </Text>
             <Text style={[styles.userName, { color: theme.text }]}>
-              Lazar Jovanović 👋
+              {userName} 👋
             </Text>
           </View>
 
@@ -157,7 +200,13 @@ export default function DashboardScreen({ navigation }: any) {
                   size={18}
                   color="#fca5a5"
                 />
-                <Text style={styles.statText}>Mesečni trošak: 3.845,00 €</Text>
+                <Text style={styles.statText}>
+                  Mesečni trošak:{" "}
+                  {ukupnoPotroseno.toLocaleString("de-DE", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  €
+                </Text>
               </View>
             </View>
           </View>
@@ -226,7 +275,7 @@ export default function DashboardScreen({ navigation }: any) {
           <View style={styles.gridRow}>
             <TouchableOpacity
               style={[styles.shortcutButton, { backgroundColor: cardBg }]}
-              onPress={() => navigation.navigate("Troškovi")}
+              onPress={() => router.push("/expenses")}
             >
               <MaterialCommunityIcons
                 name="plus-circle"
@@ -240,7 +289,7 @@ export default function DashboardScreen({ navigation }: any) {
 
             <TouchableOpacity
               style={[styles.shortcutButton, { backgroundColor: cardBg }]}
-              onPress={() => navigation.navigate("Budžeti")}
+              onPress={() => router.push("/BudgetsScreen")}
             >
               <MaterialCommunityIcons name="target" size={26} color="#10b981" />
               <Text style={[styles.shortcutText, { color: theme.text }]}>
@@ -250,7 +299,7 @@ export default function DashboardScreen({ navigation }: any) {
 
             <TouchableOpacity
               style={[styles.shortcutButton, { backgroundColor: cardBg }]}
-              onPress={() => navigation.navigate("Nagrade")}
+              onPress={() => router.push("/achievements")}
             >
               <MaterialCommunityIcons name="trophy" size={26} color="#f59e0b" />
               <Text style={[styles.shortcutText, { color: theme.text }]}>
@@ -288,7 +337,7 @@ export default function DashboardScreen({ navigation }: any) {
                 </View>
                 <View style={styles.trosakInfo}>
                   <Text style={[styles.trosakOpis, { color: theme.text }]}>
-                    {trosak.opis || trosak.kategorija}
+                    {trosak.naslov || trosak.kategorija}
                   </Text>
                   <Text style={[styles.trosakDatum, { color: theme.subText }]}>
                     {new Date(trosak.datum).toLocaleDateString("sr-RS")}
