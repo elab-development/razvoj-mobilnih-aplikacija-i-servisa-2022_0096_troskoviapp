@@ -1,17 +1,17 @@
 import { Href, router } from "expo-router";
 import { useState } from "react";
-import { supabase } from "../supabaseClient";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { supabase } from "../supabaseClient";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -20,36 +20,35 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async () => {
-  setErrorMessage(null);
+    setErrorMessage(null);
 
-  // Validacija
-  if (!email || !password) {
-    setErrorMessage("Molimo vas da unesete e-mail i lozinku.");
-    return;
-  }
+    // Validacija
+    if (!email || !password) {
+      setErrorMessage("Molimo vas da unesete e-mail i lozinku.");
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    // Prijava na Supabase Auth sistem
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
+    try {
+      // Prijava na Supabase Auth sistem
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    console.log("Korisnik uspešno ulogovan:", data.user.email);
+      console.log("Korisnik uspešno ulogovan:", data.user.email);
 
-    // Preusmeravanje na glavnu stranicu (Dashboard)
-    router.replace("/dashboard" as Href);
-
-  } catch (error: any) {
-    setErrorMessage(error.message || "Neispravni podaci za prijavu.");
-  } finally {
-    setLoading(false);
-  }
-};
+      // Preusmeravanje na glavnu stranicu (Dashboard)
+      router.replace("/dashboard" as Href);
+    } catch (error: any) {
+      setErrorMessage(error.message || "Neispravni podaci za prijavu.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -87,6 +86,21 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
+          onPress={() => router.push("/forgot-password" as Href)}
+          style={{ alignSelf: "flex-end", marginBottom: 15 }}
+        >
+          <Text
+            style={{
+              color: "#6200ee",
+              fontSize: 14,
+              fontWeight: "600",
+            }}
+          >
+            Zaboravili ste lozinku?
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading}
@@ -97,6 +111,24 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Prijavi se</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push("/forgot-password" as Href)}
+        >
+          <Text
+            style={{
+              textAlign: "center",
+              color: "#6200ee",
+              marginTop: 15,
+              fontSize: 14,
+              fontWeight: "600",
+            }}
+          >
+            Zaboravili ste lozinku?
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.footer}></View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Nemate nalog? </Text>
