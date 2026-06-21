@@ -1,12 +1,12 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { supabase } from "../supabaseClient";
 
@@ -23,7 +23,10 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {});
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo:
+          "razvojmobilnihaplikacijaiservisa20220096troskoviapp://reset-password",
+      });
 
       if (error) throw error;
 
