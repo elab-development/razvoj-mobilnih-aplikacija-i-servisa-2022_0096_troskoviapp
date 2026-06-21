@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,6 +32,8 @@ export default function AnalyticsScreen() {
   const PODRAZUMEVANI_BUDZET = 500;
   const MESECNI_LIMIT = 5000;
   const [mesecniLimit, setMesecniLimit] = useState(0);
+  const [troskovi, setTroskovi] = useState<any[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Dimenzije za manje grafikone kako bi stali jedan pored drugog
   const size = 140;
@@ -70,15 +73,15 @@ export default function AnalyticsScreen() {
         .from("budzeti")
         .select("limit_iznos")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+        .is("kategorija", null)
+        .maybeSingle();
 
       if (budzetError && budzetError.code !== "PGRST116") {
         console.warn("Budzet greska:", budzetError);
       }
 
       const limit = budzet?.limit_iznos || 0;
+
       setMesecniLimit(limit);
 
       if (profilError && profilError.code !== "PGRST") {
@@ -89,21 +92,26 @@ export default function AnalyticsScreen() {
         ? parseFloat(profil.current_balance)
         : PODRAZUMEVANI_BUDZET;
 
-      const { data: troskovi, error: troskoviError } = await supabase
+      const { data: troskoviData, error: troskoviError } = await supabase
         .from("troskovi")
-        .select("iznos")
-        .eq("user_id", user.id);
+        .select("*")
+        .eq("user_id", user.id)
+        .order("datum", { ascending: false });
 
       if (troskoviError) throw troskoviError;
 
-      const sumaTroskova = (troskovi || []).reduce(
+      const sumaTroskova = (troskoviData || []).reduce(
         (acc, curr) => acc + Math.abs(parseFloat(curr.iznos || 0)),
         0,
       );
+      console.log("Budzet:", budzet);
+      console.log("Limit:", limit);
+      console.log("Ukupno potroseno:", sumaTroskova);
+      setTroskovi(troskoviData || []);
 
       // 1. Procenat potrošnje u odnosu na Mesečni Limit
       const izracunatProcenatLimit =
-        limit > 0 ? Math.min(Math.round((sumaTroskova / limit) * 100), 100) : 0;
+        limit > 0 ? Math.min((sumaTroskova / limit) * 100, 100) : 0;
 
       // 2. Procenat potrošnje u odnosu na Ukupni Budžet (Balans + Troškovi)
       const ukupanPocetniBudzet = trenutniPreostaliBudzet + sumaTroskova;
@@ -133,6 +141,61 @@ export default function AnalyticsScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const obrisiTrosak = async (id: string) => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      // Pronađi trošak
+      const { data: trosak, error: trosakError } = await supabase
+        .from("troskovi")
+        .select("iznos")
+        .eq("id", id)
+        .single();
+
+      if (trosakError) throw trosakError;
+
+      // Pronađi trenutni balans
+      const { data: profil, error: profilError } = await supabase
+        .from("Korisnici")
+        .select("current_balance")
+        .eq("id", user.id)
+        .single();
+
+      if (profilError) throw profilError;
+
+      const noviBalans = Number(profil.current_balance) + Number(trosak.iznos);
+
+      // Vrati novac na balans
+      const { error: updateError } = await supabase
+        .from("Korisnici")
+        .update({
+          current_balance: noviBalans,
+        })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      // Obriši trošak
+      // Obriši trošak
+      const { error: deleteError } = await supabase
+        .from("troskovi")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) throw deleteError;
+
+      // Ponovo učitaj sve iz baze
+      await izracunajAnalitiku();
+    } catch (err) {
+      console.log(err);
+      Alert.alert("Greška", "Brisanje troška nije uspelo.");
     }
   };
 
@@ -206,7 +269,7 @@ export default function AnalyticsScreen() {
                 <Text
                   style={[styles.procenatText, { color: theme.text || "#fff" }]}
                 >
-                  {procenatPotrosenoLimit}%
+                  {procenatPotrosenoLimit.toFixed(1)}%
                 </Text>
               </View>
             </View>
@@ -271,7 +334,7 @@ export default function AnalyticsScreen() {
                 style={[styles.indicator, { backgroundColor: "#3b82f6" }]}
               />
               <Text style={[styles.statLabel, { color: theme.text || "#fff" }]}>
-                Mesečni limit:
+                Sve ukupno limit:
               </Text>
             </View>
             <Text style={[styles.statValue, { color: "#3b82f6" }]}>
@@ -317,6 +380,96 @@ export default function AnalyticsScreen() {
             </Text>
           </View>
         </View>
+
+        <Text
+          style={[
+            styles.title,
+            {
+              color: theme.text,
+              fontSize: 22,
+              marginTop: 20,
+            },
+          ]}
+        >
+          Svi troškovi
+        </Text>
+
+        {troskovi.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            onPress={() =>
+              setExpandedId(expandedId === item.id ? null : item.id)
+            }
+            style={{
+              backgroundColor: theme.card || "#1e293b",
+              padding: 15,
+              borderRadius: 15,
+              marginBottom: 10,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.text,
+                  fontWeight: "600",
+                }}
+              >
+                {item.naslov}
+              </Text>
+
+              <Text
+                style={{
+                  color: "#ef4444",
+                  fontWeight: "700",
+                }}
+              >
+                -{Number(item.iznos).toFixed(2)} €
+              </Text>
+            </View>
+
+            {expandedId === item.id && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ color: theme.text }}>
+                  Kategorija: {item.kategorija}
+                </Text>
+
+                <Text
+                  style={{
+                    color: theme.text,
+                    marginTop: 5,
+                  }}
+                >
+                  Opis: {item.beljeska || "Nema opisa"}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => obrisiTrosak(item.id)}
+                  style={{
+                    backgroundColor: "#ef4444",
+                    padding: 10,
+                    borderRadius: 8,
+                    marginTop: 10,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      textAlign: "center",
+                      fontWeight: "700",
+                    }}
+                  >
+                    Obriši trošak
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );

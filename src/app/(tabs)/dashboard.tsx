@@ -349,6 +349,26 @@ export default function DashboardScreen() {
               </View>
             ))
           )}
+          {poslednjiTroskovi.length > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push("/analytics")}
+              style={{
+                marginTop: 10,
+                marginBottom: 20,
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.accent,
+                  fontWeight: "700",
+                  fontSize: 15,
+                }}
+              >
+                Vidi sve troškove →
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>

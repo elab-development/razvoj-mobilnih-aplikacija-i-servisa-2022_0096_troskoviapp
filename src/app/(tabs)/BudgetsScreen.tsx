@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -52,9 +53,11 @@ export default function BudgetsScreen() {
   const [odabraniPeriod, setOdabraniPeriod] = useState("monthly");
   const [odabranaKategorija, setOdabranaKategorija] = useState("Sve");
 
-  useEffect(() => {
-    ucitajBudzete();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      ucitajBudzete();
+    }, []),
+  );
 
   const ucitajBudzete = async () => {
     try {
