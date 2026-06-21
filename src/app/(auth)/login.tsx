@@ -112,22 +112,6 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => router.push("/forgot-password" as Href)}
-        >
-          <Text
-            style={{
-              textAlign: "center",
-              color: "#6200ee",
-              marginTop: 15,
-              fontSize: 14,
-              fontWeight: "600",
-            }}
-          >
-            Zaboravili ste lozinku?
-          </Text>
-        </TouchableOpacity>
-
         <View style={styles.footer}></View>
 
         <View style={styles.footer}>
