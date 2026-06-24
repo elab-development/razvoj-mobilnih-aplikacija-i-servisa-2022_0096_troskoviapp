@@ -120,7 +120,7 @@ export default function DashboardScreen() {
           period: b.period,
           kategorija: b.kategorija,
           limit_iznos: Number(b.limit_iznos),
-          potroseno: ukupnoPotroseno,
+          potroseno: ukupno,
         });
       } else {
         setGlavniBudzet(null);
